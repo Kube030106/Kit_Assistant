@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<title>Knotopian Institute of Technology – Login</title>
+<script src="/static/theme.js"></script>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="login-page">
+<header class="site" id="site-header"></header>
+<main class="login-layout" id="main">
+  <section class="login-promo"><div class="promo-orb"></div><p class="eyebrow"><span class="live-dot"></span> THE KIT COMMUNITY</p><h1>Your campus.<br><span>Your voice.</span><br>Your space.</h1><p>Sign in to connect with your college assistant and get the support you need, whenever you need it.</p><div class="promo-points"><span>✦ Personal academic support</span><span>✦ Secure access to campus services</span><span>✦ One assistant, ready to help</span></div><div class="promo-foot">KNOTOPIAN INSTITUTE OF TECHNOLOGY <span>·</span> AI ASSISTANT</div></section>
+  <section class="login-form-side"><div class="card auth-card"><div class="auth-mark">✳</div><p class="eyebrow">WELCOME BACK</p><h2>Sign in to KIT</h2><p class="empty-note">Students and faculty, your assistant is ready.</p>
+    <form id="login-form" novalidate>
+      <div class="field"><label for="login_id">College Login ID</label><input id="login_id" autocomplete="username" placeholder="Enter your login ID" required autofocus></div>
+      <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Enter your password" required></div>
+      <p class="form-error" id="form-error" role="alert"></p>
+      <button class="btn primary" type="submit">Sign in securely <span>→</span></button>
+    </form>
+    <div class="demo"><strong>DEMO ACCESS</strong><p>For local testing, use password <b>Kit@2026</b>. Select a demo profile to fill the form.</p><div class="row"><button class="btn small" type="button" data-demo="arjun">Arjun · Student</button><button class="btn small" type="button" data-demo="priya">Priya · Student</button><button class="btn small" type="button" data-demo="lakshmi">Lakshmi · Faculty</button><button class="btn small" type="button" data-demo="senthil">Senthil · Faculty</button></div></div>
+    <a class="back-home" href="/">← Back to home</a>
+  </div></section>
+</main>
+<script src="/static/common.js"></script><script src="/static/login.js"></script>
+</body>
+</html>
