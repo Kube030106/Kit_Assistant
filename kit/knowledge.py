@@ -21,34 +21,7 @@ log = logging.getLogger("kit.knowledge")
 STOP = set("a an the is are was were be to of in on at for and or but if it its this that these those "
            "do does did can could should would will i me my we you your they what which who how when "
            "where why please tell about from with as by".split())
-PUBLIC_HINT = re.compile(r"admission|brochure|prospectus", re.I)
-STAFF_HINT = re.compile(r"faculty|teacher|staff|internal|confidential", re.I)
-
-
-def document_audience(meta: dict, title: str) -> str:
-    """Resolve document visibility conservatively; unknown documents are never public."""
-    for key in ("visibility", "audience", "access", "access_level", "access_scope"):
-        value = meta.get(key)
-        if isinstance(value, str) and value.strip():
-            normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
-            if normalized in {"public", "visitor", "visitors", "everyone", "all"}:
-                return "public"
-            if normalized in {"staff", "teacher", "teachers", "faculty", "admin", "internal", "confidential"}:
-                return "staff"
-            if normalized in {"student", "students", "authenticated", "college", "private"}:
-                return "student"
-    for key in ("is_public", "public"):
-        value = meta.get(key)
-        if isinstance(value, bool):
-            return "public" if value else "student"
-    category = " ".join(str(meta.get(k) or "") for k in ("category", "type", "kind"))
-    hint = f"{title} {category}"
-    if STAFF_HINT.search(hint):
-        return "staff"
-    if PUBLIC_HINT.search(hint):
-        return "public"
-    # Safe default: a document with unclear audience is not exposed to visitors.
-    return "student"
+PUBLIC_HINT = re.compile(r"brochure|admission|prospectus|course|fee", re.I)
 
 
 def tokenize(text: str) -> list[str]:
@@ -68,11 +41,6 @@ class Chunk:
     title: str
     text: str
     public: bool
-    audience: str | None = None
-
-    def __post_init__(self):
-        if self.audience is None:
-            self.audience = "public" if self.public else "student"
 
 
 def chunk_text(text: str, size: int = 900, overlap: int = 150) -> list[str]:
@@ -107,16 +75,11 @@ class BM25Index:
             df.update(d.keys())
         self.idf = {t: math.log(1 + (n - c + 0.5) / (c + 0.5)) for t, c in df.items()}
 
-    def search(self, query: str, k: int = 4, public_only: bool = False, role: str | None = None) -> list[Chunk]:
+    def search(self, query: str, k: int = 4, public_only: bool = False) -> list[Chunk]:
         terms = set(tokenize(query))
         scored = []
         for i, d in enumerate(self.tf):
-            chunk = self.chunks[i]
-            if public_only and chunk.audience != "public":
-                continue
-            if role == "student" and chunk.audience == "staff":
-                continue
-            if role == "public" and chunk.audience != "public":
+            if public_only and not self.chunks[i].public:
                 continue
             s = 0.0
             for t in terms:
@@ -180,11 +143,12 @@ class Knowledge:
             if did is None:
                 continue
             title = str(_first(d, ("title", "name", "filename", "file_name")) or did)
-            audience = document_audience(d, title)
-            metas.append((str(did), title, audience))
+            hint = f"{title} {_first(d, ('category', 'type', 'kind')) or ''}"
+            metas.append((str(did), title, bool(PUBLIC_HINT.search(hint))))
+        any_public = any(m[2] for m in metas)
 
         chunks, titles = [], []
-        for did, title, audience in metas:
+        for did, title, is_public in metas:
             raw = await college.download(f"/v1/documents/{quote(did, safe='')}/file")
             text = await asyncio.to_thread(extract_text, raw) if raw else ""
             pieces = chunk_text(text)
@@ -192,7 +156,7 @@ class Knowledge:
                 continue
             titles.append(title)
             for p in pieces:
-                chunks.append(Chunk(did, title, p, audience == "public", audience))
+                chunks.append(Chunk(did, title, p, is_public or not any_public))
         if not chunks:
             log.warning("no readable documents; keeping the previous index")
             return False
@@ -200,8 +164,8 @@ class Knowledge:
         log.info("indexed %d chunks from %d documents", len(chunks), len(titles))
         return True
 
-    def search(self, query: str, k: int = 4, public_only: bool = False, role: str | None = None) -> list[Chunk]:
-        return self.index.search(query, k, public_only, role)
+    def search(self, query: str, k: int = 4, public_only: bool = False) -> list[Chunk]:
+        return self.index.search(query, k, public_only)
 
 
 knowledge = Knowledge()

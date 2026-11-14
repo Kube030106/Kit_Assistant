@@ -2,7 +2,6 @@
 import asyncio
 import json
 import logging
-import os
 import re
 import time
 from collections import defaultdict, deque
@@ -67,26 +66,9 @@ async def _background() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.init()
-    if os.getenv("VERCEL"):
-        # Serverless instances cannot host a dependable perpetual refresh loop.
-        # Do a best-effort one-time sync during cold start instead.
-        try:
-            await registry.ensure()
-            await knowledge.sync()
-            await db.purge_expired()
-        except Exception:
-            log.exception("initial serverless data sync failed")
-        yield
-        return
     task = asyncio.create_task(_background())
-    try:
-        yield
-    finally:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    yield
+    task.cancel()
 
 
 app = FastAPI(title="KIT Voice Assistant", lifespan=lifespan)

@@ -4,7 +4,7 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python",
-      "config": { "includeFiles": ["static/**", "kit/**"] }
+      "config": { "includeFiles": ["static/**"] }
     }
   ],
   "routes": [

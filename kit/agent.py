@@ -61,7 +61,7 @@ async def run_turn(owner: Owner, conv_id: str, text: str):
     history = [{"role": m["role"], "content": m["content"]}
                for m in await db.get_messages(conv_id, limit=12)]
     recent = [m["content"] for m in history if m["role"] == "user"][-2:]
-    chunks = knowledge.search(" ".join(recent + [text]), k=4, role=owner.role)
+    chunks = knowledge.search(" ".join(recent + [text]), k=4, public_only=owner.role == "public")
     await registry.ensure()
     tools, schemas = registry.for_owner(owner)
     messages = [{"role": "system", "content": system_prompt(owner, chunks)},
@@ -97,7 +97,7 @@ async def run_turn(owner: Owner, conv_id: str, text: str):
             except ValueError:
                 return {"error": "Arguments were not valid JSON."}
             try:
-                return await execute(tool, args, owner, conv_id, confirmation_text=text)
+                return await execute(tool, args, owner, conv_id)
             except Exception:
                 log.exception("tool %s crashed", c.function.name)
                 return {"error": "The tool failed unexpectedly."}

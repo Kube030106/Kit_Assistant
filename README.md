@@ -42,8 +42,7 @@ SQLite: sessions, conversations, messages
 Key design choices:
 
 - **Tools come from the college API's OpenAPI spec**, read at runtime and refreshed every 10 minutes. If endpoints or fields change during the event, the assistant adapts without a code change. If the spec can't be downloaded, a small fallback tool set takes over.
-- **Safety is enforced in code, not only in the prompt** (`kit/tools.py`): visitors get an allow-list of public calls; students are restricted to their `/v1/me/` resources and narrowly allowed self-service writes; teachers are restricted to teacher/staff workflows; write tools require both the model confirmation flag and an explicit confirmation in the latest user turn; writes carry an `Idempotency-Key`. This is an additional confirmation guard, not a substitute for binding a pending action to exact server-stored details in a high-assurance production system.
-- **Document visibility is conservative** (`kit/knowledge.py`): explicit audience metadata is honored; admissions brochures can be public; faculty documents are staff-only; unknown documents default to student-only rather than being made public.
+- **Safety is enforced in code, not only in the prompt** (`kit/tools.py`): visitors get an allow-list of public calls; students can't reach staff, approval or other students' endpoints; every write needs `user_confirmed=true`; writes carry an `Idempotency-Key` so retries never create duplicates.
 - **Prompt-injection aware**: document text and API results are treated as data, never as instructions.
 - **Security**: strict CSP (no inline scripts), same-origin check on writes, rate limiting, size limits, httpOnly cookies, per-owner history isolation, secrets only in environment variables.
 - **Retrieval**: BM25 keyword ranking over the college PDFs. It needs no model download and runs on any free host. Public visitors only search admission documents.
@@ -82,7 +81,7 @@ Demo logins (password `Kit@2026`): students `arjun`, `priya`, `kavya`, ...; teac
 
 This repository includes `vercel.json` and `api/index.py`, so import the repository into Vercel as-is. In **Project Settings → Environment Variables**, add `COLLEGE_API_URL`, `COLLEGE_API_KEY`, `GROQ_API_KEY`, and `TIMEZONE=Asia/Kolkata`, then deploy. Never add the `.env` file or either key to GitHub. Set all variables for Production and Preview if you use preview links.
 
-Vercel is suitable for a short demo, but its Python filesystem is ephemeral and separate serverless instances may not share SQLite state. The app avoids starting a perpetual background refresh loop on Vercel and performs a best-effort cold-start sync. For reliable conversation history across cold starts and redeploys, deploy the included Docker configuration to Render with a persistent disk mounted at `/data`, or replace the SQLite adapter with a managed database before production.
+Vercel is suitable for the demo, but its Python filesystem is ephemeral. For conversation history that must survive cold starts and redeploys, deploy the included Docker configuration to Render with a persistent disk mounted at `/data`, or replace the SQLite adapter with a managed database before production.
 
 Render (free): New > Blueprint > pick this repo (`render.yaml`), then set `COLLEGE_API_KEY` and `GROQ_API_KEY` in the dashboard. Any host that runs a Dockerfile works the same way (Railway, Fly.io, Koyeb). The app reads the `PORT` variable.
 

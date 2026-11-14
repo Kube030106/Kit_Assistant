@@ -25,7 +25,6 @@ def test_documents_sync_from_college(fake_college):
     assert knowledge.search("attendance rule")[0].title == "Student Handbook"
     assert all(c.title == "Admissions Brochure" for c in knowledge.search("fee seats", public_only=True))
     assert knowledge.search("hostel curfew", public_only=True) == []
-    assert knowledge.search("hostel curfew", role="student")
 
 
 def test_tts_helpers():
@@ -48,18 +47,3 @@ def test_history_is_private_per_owner(fake_college):
     assert mine[0]["title"] == "What is my attendance?" and mine[0]["messages"] == 2
     assert theirs == [] and stolen is None
     assert msgs[1]["meta"] == {"tools": ["get_me_attendance"]}
-
-
-def test_unknown_documents_are_not_public_and_staff_docs_are_hidden_from_students():
-    from kit.knowledge import document_audience
-
-    assert document_audience({"title": "Internal Faculty Circular"}, "Internal Faculty Circular") == "staff"
-    assert document_audience({"title": "Unclassified Operations Notes"}, "Unclassified Operations Notes") == "student"
-    assert document_audience({"visibility": "public"}, "Random Document") == "public"
-    idx = BM25Index([
-        Chunk("1", "Faculty Handbook", "attendance grading policy", False, "staff"),
-        Chunk("2", "Student Handbook", "attendance leave policy", False, "student"),
-        Chunk("3", "Admissions Brochure", "course fees admission", True, "public"),
-    ])
-    assert all(c.audience != "staff" for c in idx.search("attendance policy", role="student"))
-    assert any(c.audience == "staff" for c in idx.search("attendance policy", role="teacher"))

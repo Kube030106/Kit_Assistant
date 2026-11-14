@@ -56,42 +56,15 @@ def is_public_allowed(method: str, path: str) -> bool:
 
 
 def role_allows(role: str, method: str, path: str) -> bool:
-    """Allow only role-scoped self-service or teacher workflow endpoints.
-
-    Unknown routes are denied by default; the college OpenAPI spec may grow during
-    the event, but new endpoints must not silently become accessible to every role.
-    """
-    method = method.upper()
-    normalized = re.sub(r"/+", "/", path.split("?", 1)[0]).rstrip("/") or "/"
-    segs = [s for s in normalized.split("/") if s]
-    if not normalized.startswith("/v1/") or normalized.startswith("/v1/auth") or ".." in segs:
+    segs = [s for s in path.split("/") if s]
+    if path.startswith("/v1/auth") or ".." in path:
         return False
-
-    # Public read-only college information is also useful after login.
-    if method == "GET" and is_public_allowed(method, normalized):
-        return True
-
     if role == "student":
-        if not normalized.startswith("/v1/me/"):
+        if any(STAFF_SEGMENT.match(s) for s in segs):
             return False
-        if method == "GET":
-            return True
-        # Students may create their own leave/OD requests, not mutate arbitrary profile data.
-        return method == "POST" and bool(re.match(
-            r"^/v1/me/(?:leave|on[-_]duty|od)[-_]requests$", normalized, re.I))
-
-    if role == "teacher":
-        if normalized.startswith("/v1/me/"):
-            return method == "GET"
-        if not re.match(r"^/v1/(?:teacher|teachers|staff)/", normalized, re.I):
+        if len(segs) > 1 and segs[1] == "students":      # other students' records
             return False
-        # Teachers can read assigned work and submit approval/rejection actions.
-        if method == "GET":
-            return True
-        return method in ("POST", "PATCH", "PUT") and bool(re.search(
-            r"/(?:approvals?|requests?)/[^/]+/(?:approve|reject)$", normalized, re.I))
-
-    return False
+    return True
 
 
 def permitted(owner: Owner, method: str, path: str) -> bool:
@@ -318,19 +291,7 @@ def _outcome(res: dict, owner: Owner) -> dict:
     return {"status": status, "error": shrink(err), "message": error_message(data)}
 
 
-def explicit_confirmation(text: str | None) -> bool:
-    if not text:
-        return False
-    normalized = re.sub(r"[^a-z0-9 ]", " ", text.lower()).strip()
-    if normalized in {"yes", "yes submit", "yes submit it", "yes please", "yes please submit",
-                      "yes please submit it", "confirm", "confirmed", "submit it",
-                      "go ahead", "go ahead and submit", "please submit", "i confirm", "do it"}:
-        return True
-    return bool(re.fullmatch(r"(?:yes|yeah|yep|sure)(?: please)?(?: submit(?: it)?)?", normalized))
-
-
-async def execute(tool: Tool, args: dict, owner: Owner, conv_id: str,
-                  confirmation_text: str | None = None) -> dict:
+async def execute(tool: Tool, args: dict, owner: Owner, conv_id: str) -> dict:
     if not isinstance(args, dict):
         return {"error": "Arguments must be a JSON object."}
     confirmed = args.get("user_confirmed") is True
@@ -342,8 +303,8 @@ async def execute(tool: Tool, args: dict, owner: Owner, conv_id: str,
             return {"error": "Path must start with /v1/ and method must be valid."}
         if not permitted(owner, method, path):
             return {"error": "You are not allowed to use this endpoint for this user."}
-        if method != "GET" and (not confirmed or not explicit_confirmation(confirmation_text)):
-            return {"error": "not_confirmed", "message": "Read the details back and get a clear yes in the latest message first."}
+        if method != "GET" and not confirmed:
+            return {"error": "not_confirmed", "message": "Read the details back and get a clear yes first."}
         body = args.get("body") if method != "GET" else None
         idem = _idem(conv_id, tool.name, [method, path, body]) if method != "GET" else None
         res = await college.request(method, path, token=owner.token, params=args.get("query") or None,
@@ -352,9 +313,9 @@ async def execute(tool: Tool, args: dict, owner: Owner, conv_id: str,
 
     if not permitted(owner, tool.method, tool.template):
         return {"error": "You are not allowed to use this action for this user."}
-    if tool.write and (not confirmed or not explicit_confirmation(confirmation_text)):
+    if tool.write and not confirmed:
         return {"error": "not_confirmed",
-                "message": "Read the details back and get a clear yes in the latest message before submitting."}
+                "message": "Read the details back to the user and get a clear yes before submitting."}
 
     path_vals, query, body = {}, {}, {}
     for arg, val in args.items():
